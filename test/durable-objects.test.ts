@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { runInDurableObject, listDurableObjectIds } from 'cloudflare:test';
 import { NotificationManager } from '../src/index';
-import { testEnv, setupTestEnvironment, createTestEndpoint, createTestSecurityEvent, mockFetch } from './helpers/test-helpers';
+import { testEnv, setupTestEnvironment, createTestEndpoint, createTestSecurityEvent, mockFetch, createGraphQLSecurityResponse } from './helpers/test-helpers';
 
 describe('Durable Objects', () => {
 	beforeAll(() => {
@@ -88,21 +88,18 @@ describe('Durable Objects', () => {
 			// Mock API response with only challenge action (not block)
 			(global.fetch as any).mockImplementation((url: string) => {
 				if (url.includes('api.cloudflare.com')) {
-					return Promise.resolve(new Response(JSON.stringify({
-						result: [{
-							ray_id: 'challenge-event-1',
-							occurred_at: new Date().toISOString(),
-							action: 'challenge', // This covers the branch where action !== 'block'
-							client_ip: '1.2.3.4',
-							country: 'US',
-							method: 'GET',
-							host: 'example.com',
-							uri: '/test',
-							user_agent: 'Mozilla/5.0',
-							rule_id: 'rule-challenge',
-							rule_message: 'Challenge'
-						}]
-					}), { status: 200 }));
+					return Promise.resolve(createGraphQLSecurityResponse([{
+						ray_id: 'challenge-event-1',
+						action: 'challenge',
+						client_ip: '1.2.3.4',
+						country: 'US',
+						method: 'GET',
+						host: 'example.com',
+						uri: '/test',
+						user_agent: 'Mozilla/5.0',
+						rule_id: 'rule-challenge',
+						rule_message: 'Challenge'
+					}]));
 				}
 				if (url.includes('example.com')) {
 					return Promise.resolve(new Response('OK', { status: 200 }));
@@ -139,21 +136,18 @@ describe('Durable Objects', () => {
 			(global.fetch as any).mockImplementation((url: string) => {
 				if (url.includes('api.cloudflare.com')) {
 					apiCalled = true;
-					return Promise.resolve(new Response(JSON.stringify({
-						result: [{
-							ray_id: 'mixed-event-1',
-							occurred_at: new Date().toISOString(),
-							action: 'challenge', // Not 'block', triggers the OR condition
-							client_ip: '1.2.3.4',
-							country: 'US',
-							method: 'GET',
-							host: 'example.com',
-							uri: '/test',
-							user_agent: 'Mozilla/5.0',
-							rule_id: 'rule-1',
-							rule_message: 'Challenge'
-						}]
-					}), { status: 200 }));
+					return Promise.resolve(createGraphQLSecurityResponse([{
+						ray_id: 'mixed-event-1',
+						action: 'challenge',
+						client_ip: '1.2.3.4',
+						country: 'US',
+						method: 'GET',
+						host: 'example.com',
+						uri: '/test',
+						user_agent: 'Mozilla/5.0',
+						rule_id: 'rule-1',
+						rule_message: 'Challenge'
+					}]));
 				}
 				if (url.includes('example.com')) {
 					webhookCalled = true;
@@ -288,9 +282,7 @@ describe('Durable Objects', () => {
 			// Mock API response with empty result
 			(global.fetch as any).mockImplementation((url: string) => {
 				if (url.includes('api.cloudflare.com')) {
-					return Promise.resolve(new Response(JSON.stringify({
-						result: [] // Empty array
-					}), { status: 200 }));
+					return Promise.resolve(createGraphQLSecurityResponse([]));
 				}
 				return Promise.resolve(new Response('Not Found', { status: 404 }));
 			});
@@ -332,9 +324,7 @@ describe('Durable Objects', () => {
 			let webhookCalled = false;
 			(global.fetch as any).mockImplementation((url: string) => {
 				if (url.includes('api.cloudflare.com')) {
-					return Promise.resolve(new Response(JSON.stringify({
-						result: [createTestSecurityEvent({ ray_id: 'already-processed' })]
-					}), { status: 200 }));
+					return Promise.resolve(createGraphQLSecurityResponse([{ ray_id: 'already-processed', action: 'block' }]));
 				}
 				if (url.includes('example.com')) {
 					webhookCalled = true;

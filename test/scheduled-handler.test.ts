@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { SELF } from 'cloudflare:test';
-import { testEnv, setupTestEnvironment, mockFetch, createTestEndpoint, createTestSecurityEvent, mockKVStorage } from './helpers/test-helpers';
+import { testEnv, setupTestEnvironment, mockFetch, createTestEndpoint, createTestSecurityEvent, mockKVStorage, createGraphQLSecurityResponse } from './helpers/test-helpers';
 
 // Type assertion for SELF with scheduled method
 const typedSELF = SELF as typeof SELF & {
@@ -38,15 +38,18 @@ describe('Scheduled Handler', () => {
 		// Mock Cloudflare API response with security events
 		(global.fetch as any).mockImplementation(async (url: string) => {
 			if (url.includes('api.cloudflare.com')) {
-				return new Response(JSON.stringify({
-					result: [createTestSecurityEvent({
-						ray_id: 'scheduled-event-1',
-						occurred_at: new Date().toISOString(),
-						user_agent: 'Mozilla/5.0',
-						rule_id: 'rule-1',
-						rule_message: 'Blocked by WAF'
-					})]
-				}), { status: 200 });
+				return createGraphQLSecurityResponse([{
+					ray_id: 'scheduled-event-1',
+					action: 'block',
+					client_ip: '1.2.3.4',
+					country: 'US',
+					method: 'GET',
+					host: 'example.com',
+					uri: '/test',
+					user_agent: 'Mozilla/5.0',
+					rule_id: 'rule-1',
+					rule_message: 'Blocked by WAF'
+				}]);
 			}
 			// Webhook response
 			return new Response('OK', { status: 200 });

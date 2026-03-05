@@ -88,44 +88,68 @@ export class NotificationManager extends DurableObject<Env> {
 	}
 
 	private async fetchSecurityEvents(startTime: Date, endTime: Date): Promise<SecurityEvent[]> {
-		const apiUrl = `https://api.cloudflare.com/client/v4/zones/${this.env.CLOUDFLARE_ZONE_ID}/security/events`;
-		
-		const params = new URLSearchParams({
-			since: startTime.toISOString(),
-			until: endTime.toISOString(),
-			limit: '100',
-			order: 'desc'
-		});
+		const query = `query {
+			viewer {
+				zones(filter: { zoneTag: "${this.env.CLOUDFLARE_ZONE_ID}" }) {
+					firewallEventsAdaptive(
+						filter: {
+							datetime_geq: "${startTime.toISOString()}"
+							datetime_leq: "${endTime.toISOString()}"
+							action_in: ["block", "challenge", "jschallenge"]
+						}
+						limit: 100
+						orderBy: [datetime_DESC]
+					) {
+						rayName
+						datetime
+						action
+						clientIP
+						clientCountry
+						clientRequestHTTPMethodName
+						clientRequestHTTPHost
+						clientRequestPath
+						userAgent
+						ruleId
+						description
+					}
+				}
+			}
+		}`;
 
-		const response = await fetch(`${apiUrl}?${params}`, {
+		const response = await fetch('https://api.cloudflare.com/client/v4/graphql', {
+			method: 'POST',
 			headers: {
 				'Authorization': `Bearer ${this.env.CLOUDFLARE_API_TOKEN}`,
 				'Content-Type': 'application/json',
 			},
+			body: JSON.stringify({ query }),
 		});
 
 		if (!response.ok) {
-			throw new Error(`Cloudflare API error: ${response.status}`);
+			throw new Error(`Cloudflare GraphQL API error: ${response.status}`);
 		}
 
 		const data = await response.json() as any;
-		
-		const allowedActions = ['block', 'challenge', 'jschallenge'];
-		return data.result
-			.filter((event: any) => allowedActions.includes(event.action))
-			.map((event: any) => ({
-				id: event.ray_id,
-				timestamp: event.occurred_at,
-				action: event.action,
-				clientIP: event.client_ip,
-				country: event.country,
-				method: event.method,
-				host: event.host,
-				uri: event.uri,
-				userAgent: event.user_agent,
-				ruleId: event.rule_id,
-				ruleName: event.rule_message || 'Unknown',
-			}));
+
+		if (data.errors?.length > 0) {
+			throw new Error(`GraphQL error: ${data.errors[0].message}`);
+		}
+
+		const events = data.data?.viewer?.zones?.[0]?.firewallEventsAdaptive ?? [];
+
+		return events.map((event: any) => ({
+			id: event.rayName,
+			timestamp: event.datetime,
+			action: event.action,
+			clientIP: event.clientIP,
+			country: event.clientCountry,
+			method: event.clientRequestHTTPMethodName,
+			host: event.clientRequestHTTPHost,
+			uri: event.clientRequestPath,
+			userAgent: event.userAgent || '',
+			ruleId: event.ruleId || '',
+			ruleName: event.description || 'Unknown',
+		}));
 	}
 
 	async sendNotifications(event: SecurityEvent): Promise<void> {

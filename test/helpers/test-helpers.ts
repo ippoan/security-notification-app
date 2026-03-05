@@ -9,15 +9,42 @@ export const testEnv = env as typeof env & {
 	PROCESSED_EVENTS: KVNamespace;
 };
 
-// Mock global fetch with default success response
+// Mock global fetch with default success response (GraphQL format)
 export function mockFetch(response?: any) {
-	const defaultResponse = new Response(JSON.stringify({ result: [] }), {
+	const defaultResponse = new Response(JSON.stringify({
+		data: { viewer: { zones: [{ firewallEventsAdaptive: [] }] } }
+	}), {
 		status: 200,
 		headers: { 'Content-Type': 'application/json' },
 	});
-	
+
 	global.fetch = vi.fn(() => Promise.resolve(response || defaultResponse)) as any;
 	return global.fetch;
+}
+
+// Helper to create a GraphQL API response for security events
+export function createGraphQLSecurityResponse(events: any[]) {
+	return new Response(JSON.stringify({
+		data: {
+			viewer: {
+				zones: [{
+					firewallEventsAdaptive: events.map(e => ({
+						rayName: e.ray_id ?? e.rayName ?? 'test-ray',
+						datetime: e.occurred_at ?? e.datetime ?? new Date().toISOString(),
+						action: e.action ?? 'block',
+						clientIP: e.client_ip ?? e.clientIP ?? '1.2.3.4',
+						clientCountry: e.country ?? e.clientCountry ?? 'US',
+						clientRequestHTTPMethodName: e.method ?? e.clientRequestHTTPMethodName ?? 'GET',
+						clientRequestHTTPHost: e.host ?? e.clientRequestHTTPHost ?? 'example.com',
+						clientRequestPath: e.uri ?? e.clientRequestPath ?? '/test',
+						userAgent: e.user_agent ?? e.userAgent ?? 'Mozilla/5.0',
+						ruleId: e.rule_id ?? e.ruleId ?? 'rule-1',
+						description: e.rule_message ?? e.description ?? 'Unknown',
+					}))
+				}]
+			}
+		}
+	}), { status: 200 });
 }
 
 // Create a test endpoint

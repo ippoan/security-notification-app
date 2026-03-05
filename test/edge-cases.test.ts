@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import { createRPCWorker } from './test-utils';
+import { createGraphQLSecurityResponse } from './helpers/test-helpers';
 
 // Type assertion for env with required properties
 const testEnv = env as typeof env & {
@@ -91,21 +92,18 @@ describe('Edge Cases and Error Handling', () => {
 		it('should handle jschallenge action type', async () => {
 			// Mock API response with jschallenge action
 			(global.fetch as any).mockResolvedValueOnce(
-				new Response(JSON.stringify({
-					result: [{
-						ray_id: 'js-event-1',
-						occurred_at: new Date().toISOString(),
-						action: 'jschallenge',
-						client_ip: '1.2.3.4',
-						country: 'US',
-						method: 'GET',
-						host: 'example.com',
-						uri: '/test',
-						user_agent: 'Mozilla/5.0',
-						rule_id: 'rule-js',
-						rule_message: 'JS Challenge'
-					}]
-				}), { status: 200 })
+				createGraphQLSecurityResponse([{
+					ray_id: 'js-event-1',
+					action: 'jschallenge',
+					client_ip: '1.2.3.4',
+					country: 'US',
+					method: 'GET',
+					host: 'example.com',
+					uri: '/test',
+					user_agent: 'Mozilla/5.0',
+					rule_id: 'rule-js',
+					rule_message: 'JS Challenge'
+				}])
 			);
 
 			const result = await worker.checkSecurityEvents();
@@ -121,51 +119,20 @@ describe('Edge Cases and Error Handling', () => {
 				enabled: true
 			});
 
-			// Mock API response with mixed actions
+			// Mock API response — GraphQL already filters by action_in, so only block events returned
 			(global.fetch as any).mockResolvedValueOnce(
-				new Response(JSON.stringify({
-					result: [
-						{
-							ray_id: 'allow-event-1',
-							occurred_at: new Date().toISOString(),
-							action: 'allow',  // This should be filtered out
-							client_ip: '1.2.3.4',
-							country: 'US',
-							method: 'GET',
-							host: 'example.com',
-							uri: '/test',
-							user_agent: 'Mozilla/5.0',
-							rule_id: 'rule-allow',
-							rule_message: 'Allowed'
-						},
-						{
-							ray_id: 'log-event-1',
-							occurred_at: new Date().toISOString(),
-							action: 'log',  // This should be filtered out
-							client_ip: '1.2.3.5',
-							country: 'US',
-							method: 'POST',
-							host: 'example.com',
-							uri: '/api',
-							user_agent: 'Mozilla/5.0',
-							rule_id: 'rule-log',
-							rule_message: 'Logged'
-						},
-						{
-							ray_id: 'block-event-1',
-							occurred_at: new Date().toISOString(),
-							action: 'block',  // This should pass through
-							client_ip: '1.2.3.6',
-							country: 'US',
-							method: 'GET',
-							host: 'example.com',
-							uri: '/blocked',
-							user_agent: 'Mozilla/5.0',
-							rule_id: 'rule-block',
-							rule_message: 'Blocked'
-						}
-					]
-				}), { status: 200 })
+				createGraphQLSecurityResponse([{
+					ray_id: 'block-event-1',
+					action: 'block',
+					client_ip: '1.2.3.6',
+					country: 'US',
+					method: 'GET',
+					host: 'example.com',
+					uri: '/blocked',
+					user_agent: 'Mozilla/5.0',
+					rule_id: 'rule-block',
+					rule_message: 'Blocked'
+				}])
 			);
 
 			// Mock KV to mark block-event-1 as not processed
@@ -183,24 +150,21 @@ describe('Edge Cases and Error Handling', () => {
 			testEnv.PROCESSED_EVENTS.get = originalGet;
 		});
 
-		it('should handle empty rule_message', async () => {
-			// Mock API response without rule_message
+		it('should handle empty description', async () => {
+			// Mock API response without description
 			(global.fetch as any).mockResolvedValueOnce(
-				new Response(JSON.stringify({
-					result: [{
-						ray_id: 'no-msg-event',
-						occurred_at: new Date().toISOString(),
-						action: 'block',
-						client_ip: '1.2.3.4',
-						country: 'US',
-						method: 'GET',
-						host: 'example.com',
-						uri: '/test',
-						user_agent: 'Mozilla/5.0',
-						rule_id: 'rule-no-msg'
-						// rule_message is missing
-					}]
-				}), { status: 200 })
+				createGraphQLSecurityResponse([{
+					ray_id: 'no-msg-event',
+					action: 'block',
+					client_ip: '1.2.3.4',
+					country: 'US',
+					method: 'GET',
+					host: 'example.com',
+					uri: '/test',
+					user_agent: 'Mozilla/5.0',
+					rule_id: 'rule-no-msg',
+					rule_message: undefined
+				}])
 			);
 
 			const result = await worker.checkSecurityEvents();
@@ -470,21 +434,19 @@ describe('Edge Cases and Error Handling', () => {
 		it('should handle events with invalid timestamps', async () => {
 			// Mock API response with invalid timestamp
 			(global.fetch as any).mockResolvedValueOnce(
-				new Response(JSON.stringify({
-					result: [{
-						ray_id: 'invalid-time-event',
-						occurred_at: 'invalid-date',
-						action: 'block',
-						client_ip: '1.2.3.4',
-						country: 'US',
-						method: 'GET',
-						host: 'example.com',
-						uri: '/test',
-						user_agent: 'Mozilla/5.0',
-						rule_id: 'rule-1',
-						rule_message: 'Blocked'
-					}]
-				}), { status: 200 })
+				createGraphQLSecurityResponse([{
+					ray_id: 'invalid-time-event',
+					occurred_at: 'invalid-date',
+					action: 'block',
+					client_ip: '1.2.3.4',
+					country: 'US',
+					method: 'GET',
+					host: 'example.com',
+					uri: '/test',
+					user_agent: 'Mozilla/5.0',
+					rule_id: 'rule-1',
+					rule_message: 'Blocked'
+				}])
 			);
 
 			const result = await worker.checkSecurityEvents();
