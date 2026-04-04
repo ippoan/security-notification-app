@@ -41,14 +41,9 @@
 	],
 	"observability": {
 		"enabled": true
+	},
+	"vars": {
+		"CLOUDFLARE_API_TOKEN": "",
+		"CLOUDFLARE_ZONE_ID": ""
 	}
-	/**
-	 * Environment Variables - Set these via wrangler secret or in dashboard
-	 * CLOUDFLARE_API_TOKEN: Your Cloudflare API token with read access to security events
-	 * CLOUDFLARE_ZONE_ID: The zone ID to monitor for security events
-	 */
-	// "vars": { 
-	//   "CLOUDFLARE_API_TOKEN": "your-api-token",
-	//   "CLOUDFLARE_ZONE_ID": "your-zone-id"
-	// }
 }
