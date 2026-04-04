@@ -14,8 +14,8 @@ jobs:
   ci:
     uses: ippoan/ci-workflows/.github/workflows/frontend-ci.yml@main
     with:
+      project_type: worker
       has_tests: true
-      typecheck_command: 'npx tsc --noEmit'
       post_install_script: 'npx wrangler types'
       test_command: 'npx vitest run --coverage'
     secrets: inherit
