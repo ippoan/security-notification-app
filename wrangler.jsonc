@@ -48,7 +48,26 @@
 	},
 	"env": {
 		"staging": {
-			"name": "security-notification-app-staging"
+			"name": "security-notification-app-staging",
+			"durable_objects": {
+				"bindings": [
+					{
+						"class_name": "NotificationManager",
+						"name": "NOTIFICATION_MANAGER"
+					}
+				]
+			},
+			"kv_namespaces": [
+				{
+					"binding": "PROCESSED_EVENTS",
+					"id": "78e463be2e6846d68afcde0fe204ccdf",
+					"preview_id": "78e463be2e6846d68afcde0fe204ccdf"
+				}
+			],
+			"vars": {
+				"CLOUDFLARE_API_TOKEN": "",
+				"CLOUDFLARE_ZONE_ID": ""
+			}
 		}
 	}
 }
