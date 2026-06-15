@@ -305,7 +305,7 @@ export class NotificationManager extends DurableObject<Env> {
 				type: 'section',
 				text: {
 					type: 'mrkdwn',
-					text: `*Summary:* ${summaryText}\n*Time Range:* ${new Date(events[0].timestamp).toLocaleString()} - ${new Date(events[events.length - 1].timestamp).toLocaleString()}`
+					text: `*Summary:* ${summaryText}\n*Time Range (JST):* ${formatJst(events[0].timestamp)} - ${formatJst(events[events.length - 1].timestamp)}`
 				}
 			}
 		];
@@ -326,7 +326,7 @@ export class NotificationManager extends DurableObject<Env> {
 					{ type: 'mrkdwn', text: `*Host:* ${event.host}` },
 					{ type: 'mrkdwn', text: `*URI:* ${event.uri}` },
 					{ type: 'mrkdwn', text: `*Rule:* ${event.ruleName}` },
-					{ type: 'mrkdwn', text: `*Time:* ${new Date(event.timestamp).toLocaleString()}` }
+					{ type: 'mrkdwn', text: `*Time (JST):* ${formatJst(event.timestamp)}` }
 				]
 			});
 		});
@@ -373,7 +373,7 @@ export class NotificationManager extends DurableObject<Env> {
 
 		const rows = events.slice(0, 20).map(e => `
 			<tr>
-				<td>${escapeHtml(new Date(e.timestamp).toLocaleString())}</td>
+				<td>${escapeHtml(formatJst(e.timestamp))}</td>
 				<td>${escapeHtml(e.action)}</td>
 				<td>${escapeHtml(e.clientIP)}</td>
 				<td>${escapeHtml(e.country)}</td>
@@ -389,9 +389,9 @@ export class NotificationManager extends DurableObject<Env> {
 <html><body style="font-family: sans-serif;">
 <h2>🚨 ${events.length} Cloudflare Security Events</h2>
 <p><b>Summary:</b> ${escapeHtml(summaryText)}</p>
-<p><b>Time range:</b> ${escapeHtml(new Date(events[events.length - 1].timestamp).toLocaleString())} - ${escapeHtml(new Date(events[0].timestamp).toLocaleString())}</p>
+<p><b>Time range (JST):</b> ${escapeHtml(formatJst(events[events.length - 1].timestamp))} - ${escapeHtml(formatJst(events[0].timestamp))}</p>
 <table border="1" cellpadding="4" cellspacing="0" style="border-collapse: collapse;">
-	<thead><tr><th>Time</th><th>Action</th><th>Client IP</th><th>Country</th><th>Method</th><th>Host/URI</th><th>Rule</th></tr></thead>
+	<thead><tr><th>Time (JST)</th><th>Action</th><th>Client IP</th><th>Country</th><th>Method</th><th>Host/URI</th><th>Rule</th></tr></thead>
 	<tbody>${rows}</tbody>
 </table>
 ${moreNote}
@@ -589,4 +589,18 @@ function escapeHtml(s: string): string {
 		.replace(/>/g, '&gt;')
 		.replace(/"/g, '&quot;')
 		.replace(/'/g, '&#39;');
+}
+
+// Workers default to UTC, so explicitly pin display to JST.
+function formatJst(iso: string): string {
+	return new Date(iso).toLocaleString('ja-JP', {
+		timeZone: 'Asia/Tokyo',
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit',
+		hour: '2-digit',
+		minute: '2-digit',
+		second: '2-digit',
+		hour12: false,
+	});
 }
