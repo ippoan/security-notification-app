@@ -71,20 +71,22 @@ export class NotificationManager extends DurableObject<Env> {
 		}
 	}
 
-	async checkAndNotifySecurityEvents(): Promise<void> {
+	// force=true で dedupe (PROCESSED_EVENTS) と NOTIFY_MIN_EVENTS 閾値を無視し、
+	// 直近 24h の全 event を再通知する (手動テスト送信用、`/api/check-events?force=1`)。
+	async checkAndNotifySecurityEvents(force = false): Promise<void> {
 		try {
 			const now = new Date();
 			const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
 			const events = await this.fetchSecurityEvents(oneDayAgo, now);
-			
-			// Collect unprocessed events
+
+			// Collect unprocessed events (force=true は全件を対象にする)
 			const unprocessedEvents: SecurityEvent[] = [];
-			
+
 			for (const event of events) {
 				const eventKey = `event:${event.id}`;
-				const processed = await this.env.PROCESSED_EVENTS.get(eventKey);
-				
+				const processed = force ? null : await this.env.PROCESSED_EVENTS.get(eventKey);
+
 				if (!processed) {
 					unprocessedEvents.push(event);
 				}
@@ -118,7 +120,7 @@ export class NotificationManager extends DurableObject<Env> {
 				// 件数閾値: 新規 event が NOTIFY_MIN_EVENTS 未満なら通知を抑制
 				// (observability log は残す)。既定 1 = 現状維持。dedupe のため
 				// 通知有無に関わらず processed mark は付ける。
-				if (unprocessedEvents.length >= parseMinEvents(this.env as unknown as ClassifyEnv)) {
+				if (force || unprocessedEvents.length >= parseMinEvents(this.env as unknown as ClassifyEnv)) {
 					await this.sendNotificationsBatch(unprocessedEvents);
 				}
 
@@ -601,10 +603,13 @@ export default class SecurityNotificationWorker extends WorkerEntrypoint<Env> {
 			return Response.json({ success: true });
 		}
 
-		// Manual trigger for checking security events
+		// Manual trigger for checking security events.
+		// `?force=1` (or `?force=true`) で dedupe / 閾値を無視して直近 24h を再送 (テスト用)。
 		if (url.pathname === '/api/check-events' && request.method === 'POST') {
-			await notificationManager.checkAndNotifySecurityEvents();
-			return Response.json({ success: true, message: 'Security events checked' });
+			const forceParam = url.searchParams.get('force');
+			const force = forceParam === '1' || forceParam === 'true';
+			await notificationManager.checkAndNotifySecurityEvents(force);
+			return Response.json({ success: true, message: 'Security events checked', force });
 		}
 
 		return new Response('Security Notification API', { status: 200 });

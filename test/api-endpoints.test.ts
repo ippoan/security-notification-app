@@ -24,6 +24,18 @@ describe('API Endpoints', () => {
 			expect(data.success).toBe(true);
 			expect(data.message).toBe('Security events checked');
 		});
+
+		it('should accept force=1 and force=true on manual trigger', async () => {
+			mockFetch();
+			for (const v of ['1', 'true']) {
+				const response = await SELF.fetch(`http://localhost/api/check-events?force=${v}`, {
+					method: 'POST'
+				});
+				expect(response.status).toBe(200);
+				const data = await response.json() as { success: boolean; force: boolean };
+				expect(data.force).toBe(true);
+			}
+		});
 	});
 
 	describe('Endpoint Management', () => {
