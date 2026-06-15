@@ -36,7 +36,7 @@ export function createGraphQLSecurityResponse(events: any[]) {
 						datetime: e.occurred_at ?? e.datetime ?? new Date().toISOString(),
 						action: e.action ?? 'block',
 						clientIP: e.client_ip ?? e.clientIP ?? '1.2.3.4',
-						clientCountry: e.country ?? e.clientCountry ?? 'US',
+						clientCountryName: e.country ?? e.clientCountryName ?? e.clientCountry ?? 'US',
 						clientRequestHTTPMethodName: e.method ?? e.clientRequestHTTPMethodName ?? 'GET',
 						clientRequestHTTPHost: e.host ?? e.clientRequestHTTPHost ?? 'example.com',
 						clientRequestPath: e.uri ?? e.clientRequestPath ?? '/test',

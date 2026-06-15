@@ -407,13 +407,13 @@ describe('Edge Cases and Error Handling', () => {
 							zones: [
 								{ firewallEventsAdaptive: [{
 									rayName: 'zone1-event', datetime: new Date().toISOString(),
-									action: 'block', clientIP: '1.1.1.1', clientCountry: 'US',
+									action: 'block', clientIP: '1.1.1.1', clientCountryName: 'US',
 									clientRequestHTTPMethodName: 'GET', clientRequestHTTPHost: 'a.example.com',
 									clientRequestPath: '/', userAgent: 'UA', ruleId: 'r1', description: 'd1',
 								}] },
 								{ firewallEventsAdaptive: [{
 									rayName: 'zone2-event', datetime: new Date().toISOString(),
-									action: 'challenge', clientIP: '2.2.2.2', clientCountry: 'JP',
+									action: 'challenge', clientIP: '2.2.2.2', clientCountryName: 'JP',
 									clientRequestHTTPMethodName: 'POST', clientRequestHTTPHost: 'b.example.com',
 									clientRequestPath: '/x', userAgent: 'UA', ruleId: 'r2', description: 'd2',
 								}] },
