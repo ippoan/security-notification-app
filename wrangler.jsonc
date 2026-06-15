@@ -39,7 +39,7 @@
 	],
 	"triggers": {
 		"crons": [
-			"*/5 * * * *"
+			"0 21 * * *"
 		]
 	},
 	"compatibility_flags": [

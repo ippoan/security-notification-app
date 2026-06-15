@@ -17,7 +17,7 @@ describe('Scheduled Handler', () => {
 
 		const result = await typedSELF.scheduled({
 			scheduledTime: new Date(Date.now()),
-			cron: '*/5 * * * *',
+			cron: '0 21 * * *',
 		});
 		
 		expect(result.outcome).toBe('ok');
@@ -64,7 +64,7 @@ describe('Scheduled Handler', () => {
 		// Execute scheduled event
 		const result = await typedSELF.scheduled({
 			scheduledTime: new Date(Date.now()),
-			cron: '*/5 * * * *',
+			cron: '0 21 * * *',
 		});
 		
 		expect(result.outcome).toBe('ok');
@@ -73,7 +73,7 @@ describe('Scheduled Handler', () => {
 		expect(testEnv.PROCESSED_EVENTS.put).toHaveBeenCalledWith(
 			'event:scheduled-event-1',
 			expect.any(String),
-			expect.objectContaining({ expirationTtl: 86400 })
+			expect.objectContaining({ expirationTtl: 172800 })
 		);
 		
 		// Restore original methods
@@ -86,7 +86,7 @@ describe('Scheduled Handler', () => {
 		// Execute scheduled event
 		const result = await typedSELF.scheduled({
 			scheduledTime: new Date(Date.now()),
-			cron: '*/5 * * * *',
+			cron: '0 21 * * *',
 		});
 		
 		expect(result.outcome).toBe('ok');

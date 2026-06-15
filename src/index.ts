@@ -65,9 +65,9 @@ export class NotificationManager extends DurableObject<Env> {
 	async checkAndNotifySecurityEvents(): Promise<void> {
 		try {
 			const now = new Date();
-			const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
-			
-			const events = await this.fetchSecurityEvents(fiveMinutesAgo, now);
+			const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+			const events = await this.fetchSecurityEvents(oneDayAgo, now);
 			
 			// Collect unprocessed events
 			const unprocessedEvents: SecurityEvent[] = [];
@@ -107,7 +107,7 @@ export class NotificationManager extends DurableObject<Env> {
 				for (const event of unprocessedEvents) {
 					const eventKey = `event:${event.id}`;
 					await this.env.PROCESSED_EVENTS.put(eventKey, JSON.stringify(event), {
-						expirationTtl: 86400 // 24 hours
+						expirationTtl: 172800 // 48 hours (24h window x 2 で境界重複を吸収)
 					});
 				}
 			}
