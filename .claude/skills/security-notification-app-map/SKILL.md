@@ -27,6 +27,7 @@ Slack endpoint へ通知する単一 Worker。
 | `SecurityNotificationWorker` (default export) | `WorkerEntrypoint`。RPC method (`checkSecurityEvents` / `addEndpoint` 等) + HTTP route (`/api/endpoints` CRUD / `/api/check-events`) + `scheduled` (cron) |
 | `sendEmailBatch` (DO 内) | `cloudflare:email` + `mimetext` で HTML テーブル形式 email を送信。`NOTIFY_EMAIL_FROM` → `NOTIFY_EMAIL_TO` 固定、events 最大 20 件 + summary |
 | `sendWebhookBatch` / `sendSlackBatch` | endpoint type 別の通知。webhook は JSON POST、Slack は Block Kit |
+| `classify.ts` (別ファイル, pure) | CF Access 観点で host を 4 分類 (`access-candidate` / `unknown` / `gated` / `public`) + 集計 + email/Slack/webhook 用 render helper。`summarize` / `classifyHost` / `parseClassifyConfig` / `parseMinEvents` を export。副作用なし = `test/classify.test.ts` で 100% カバー |
 
 ## entrypoint (`fetch` の HTTP route)
 
@@ -55,6 +56,7 @@ Slack endpoint へ通知する単一 Worker。
 - **GraphQL field 名は `clientCountryName`** (`clientCountry` ではない、PR #15 で 1 度踏んだ)。`firewallEventsAdaptive` の field 名は CF 側の schema 進化に追従が必要。
 - **48h KV dedupe**: 各 event の Ray ID を key にして `PROCESSED_EVENTS` KV に 48h TTL で書く (`event:<rayId>`)。fetch window が 24h なので TTL=48h で境界重複 (前日の cron で投げ損ねた event が翌日 window にもう一度入る等) を吸収する。`sendNotificationsBatch` の前に `console.log('security_events_detected', ...)` で構造化 log も出力 (PR #16) — CCoW から `cf_logging` MCP で過去 events を query 可能。
 - **email は常時送信**: PR #10 で `sendNotificationsBatch` 冒頭で `sendEmailBatch` を必ず呼ぶ。endpoint 登録不要 (endpoint type `email` は no-op)。webhook / Slack は endpoint 登録された分だけ追加で送る。
+- **CF Access 分類 + 件数閾値** (`src/classify.ts`): 通知に host の CF Access 対応要否分類 (⚠️要検討 / ❓不明 / ✅済 / 🌐公開) を載せ、email 件名に actionable 件数を付ける。host パターンは `ACCESS_{GATED,CANDIDATE,PUBLIC}_PATTERNS` env (未設定は ippoan default)。`NOTIFY_MIN_EVENTS` (default 1) 未満は通知抑制 (dedupe mark / log は残す)。分類は config ベースで live Access API は叩かない (token scope が Security Events Read のみのため = トリアージのヒント)。閾値分岐 (`this.env` scalar) は DO 実体の env に届けるため test では `runInDurableObject` で `(instance as any).env.NOTIFY_MIN_EVENTS` を直接 set する (test-side `env` proxy への代入は DO に伝播しない。KV binding は同一オブジェクト共有なので効く、の非対称に注意)。
 - **`send_email` binding** (`EMAIL`): `cloudflare:email` + `mimetext` で送信。`destination_address` は `wrangler.jsonc` の `[[send_email]]` で **静的固定** (Email Routing の制約)。From/To を変える時は `vars.NOTIFY_EMAIL_FROM` / `NOTIFY_EMAIL_TO` と `[[send_email]] destination_address` の **両方**を更新する必要あり。
 - **`cloudflare:email` は vitest-pool-workers v0.5 で module 解決失敗**: `sendEmailBatch` は dynamic import (`await import('cloudflare:email')`)。test では mock 不要 (path に到達しない or dynamic import が catch される)。
 - **PROD worker 名 `security-notification-app`**: workers.dev は `security-notification-app.m-tama-ramu.workers.dev`。CF dashboard では Variables and secrets に `Secrets Store / CLOUDFLARE_API_TOKEN` binding が出る (PR #12 以前は `Plaintext / CLOUDFLARE_API_TOKEN (空)` だった)。

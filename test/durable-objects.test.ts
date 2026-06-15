@@ -275,6 +275,56 @@ describe('Durable Objects', () => {
 	});
 
 	describe('Branch Coverage', () => {
+		it('should suppress notification below NOTIFY_MIN_EVENTS but still mark processed', async () => {
+			const id = testEnv.NOTIFICATION_MANAGER.idFromName('test-min-events');
+			const stub = testEnv.NOTIFICATION_MANAGER.get(id);
+			await stub.addEndpoint(createTestEndpoint({ enabled: true }));
+
+			let webhookCalled = false;
+			(global.fetch as any).mockImplementation((url: string) => {
+				if (url.includes('api.cloudflare.com')) {
+					return Promise.resolve(createGraphQLSecurityResponse([{
+						ray_id: 'below-threshold-1', action: 'block', client_ip: '9.9.9.9',
+						country: 'US', method: 'GET', host: 'example.com', uri: '/x',
+						user_agent: 'UA', rule_id: 'r', rule_message: 'Blocked'
+					}]));
+				}
+				if (url.includes('example.com')) {
+					webhookCalled = true;
+					return Promise.resolve(new Response('OK', { status: 200 }));
+				}
+				return Promise.resolve(new Response('Not Found', { status: 404 }));
+			});
+
+			const originalGet = testEnv.PROCESSED_EVENTS.get;
+			const originalPut = testEnv.PROCESSED_EVENTS.put;
+			testEnv.PROCESSED_EVENTS.get = vi.fn().mockResolvedValue(null);
+			testEnv.PROCESSED_EVENTS.put = vi.fn().mockResolvedValue(undefined);
+
+			// NOTIFY_MIN_EVENTS is a scalar var read from `this.env`; the DO env is a
+			// distinct object from the test-side `env`, so set it on the live instance.
+			await runInDurableObject(stub, async (instance: NotificationManager) => {
+				const doEnv = (instance as any).env;
+				doEnv.NOTIFY_MIN_EVENTS = '5';
+				try {
+					await instance.checkAndNotifySecurityEvents();
+
+					// 1 event < threshold 5 -> no notification sent, but dedupe mark still written
+					expect(webhookCalled).toBe(false);
+					expect(testEnv.PROCESSED_EVENTS.put).toHaveBeenCalledWith(
+						'event:below-threshold-1',
+						expect.any(String),
+						expect.objectContaining({ expirationTtl: 172800 })
+					);
+				} finally {
+					delete doEnv.NOTIFY_MIN_EVENTS;
+				}
+			});
+
+			testEnv.PROCESSED_EVENTS.get = originalGet;
+			testEnv.PROCESSED_EVENTS.put = originalPut;
+		});
+
 		it('should handle empty result array from API', async () => {
 			const id = testEnv.NOTIFICATION_MANAGER.idFromName('test-empty-result');
 			const stub = testEnv.NOTIFICATION_MANAGER.get(id);

@@ -98,6 +98,46 @@ POST /api/check-events
 - `challenge`: チャレンジを受けたリクエスト
 - `jschallenge`: JavaScriptチャレンジ
 
+## CF Access 観点の分類 (トリアージ)
+
+通知 (email / Slack / webhook) には、各イベントの host を **CF Access 対応が必要か**で
+分類した集計が載る。`block` の大半は WAF が無料で弾いた routine だが、その中から
+「Access を被せるべき開発系」や「判断できない host」を拾い出すのが目的。
+
+| カテゴリ | 意味 |
+|---|---|
+| ⚠️ 要 CF Access 検討 | dev/staging/internal 風だが Access 未適用の host (= 対応候補) |
+| ❓ 不明 (要確認) | どのパターンにも当てはまらない host (= 人間が分類する対象) |
+| ✅ CF Access 済み | 既に Access で保護済みとみなす host |
+| 🌐 公開 (Access 不要) | 公開本番。WAF/Bot で対処 |
+
+- email 件名には actionable (要検討 + 不明) 件数が ` ⚠️要対応 N` として付く。
+- 分類ロジックは `src/classify.ts` (pure module、副作用なし)。host パターンは
+  `wrangler.jsonc` の `vars` で上書き可能 (未設定は ippoan 向けデフォルト):
+
+| var | デフォルト | 用途 |
+|---|---|---|
+| `ACCESS_GATED_PATTERNS` | `*-staging.ippoan.org,*-dev.ippoan.org` | Access 済み host |
+| `ACCESS_CANDIDATE_PATTERNS` | `*staging*,*dev*,*test*,*internal*,*admin*,*preview*` | 要対応候補 |
+| `ACCESS_PUBLIC_PATTERNS` | `*.ippoan.org,*.mtamaramu.com,*.m-tama-ramu.workers.dev` | 公開本番 |
+
+> 注: gated 判定は **config (host パターン) ベース**で、live な CF Access API は
+> 叩かない (worker token は Security Events Read scope のみ)。config に無い既 gated
+> host は candidate/public に誤分類され得る = あくまでトリアージのヒント。
+
+## 通知ノイズの抑制 (件数閾値)
+
+`NOTIFY_MIN_EVENTS` (plain var、未設定 = `1` で現状維持) を超えた時だけ通知する。
+少件数の routine block 日を黙らせたい場合に上げる。閾値未満でも **dedupe mark
+(`PROCESSED_EVENTS` KV) と observability log は残す**ので、取りこぼしや二重通知は無い。
+
+```jsonc
+// wrangler.jsonc vars 例
+"NOTIFY_MIN_EVENTS": "20"   // 20 件未満の日はメールしない
+```
+
+週次ダイジェストにしたい場合は `triggers.crons` を `"0 21 * * 0"` (日曜のみ) 等に変更する。
+
 ## 必要なCloudflare API権限
 
 APIトークンには以下の権限が必要です:
