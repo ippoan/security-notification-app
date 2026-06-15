@@ -6,7 +6,7 @@ import { createGraphQLSecurityResponse } from './helpers/test-helpers';
 // Type assertion for env with required properties
 const testEnv = env as typeof env & {
 	CLOUDFLARE_API_TOKEN: string;
-	CLOUDFLARE_ZONE_ID: string;
+	CLOUDFLARE_ZONE_IDS: string;
 };
 
 // Mock global fetch
@@ -19,7 +19,7 @@ describe('Edge Cases and Error Handling', () => {
 		worker = createRPCWorker(testEnv);
 		vi.clearAllMocks();
 		testEnv.CLOUDFLARE_API_TOKEN = 'test-token';
-		testEnv.CLOUDFLARE_ZONE_ID = 'test-zone-id';
+		testEnv.CLOUDFLARE_ZONE_IDS = 'test-zone-id-1,test-zone-id-2';
 	});
 
 	describe('Webhook error handling', () => {
@@ -395,6 +395,43 @@ describe('Edge Cases and Error Handling', () => {
 			const result = await worker.sendTestNotification(testEvent);
 			expect(result.success).toBe(true);
 			expect(result.notifiedEndpoints).toBe(3); // All 3 active endpoints attempted
+		});
+	});
+
+	describe('Multi-zone aggregation', () => {
+		it('should aggregate events from multiple zones (flatMap)', async () => {
+			(global.fetch as any).mockImplementationOnce(async () =>
+				new Response(JSON.stringify({
+					data: {
+						viewer: {
+							zones: [
+								{ firewallEventsAdaptive: [{
+									rayName: 'zone1-event', datetime: new Date().toISOString(),
+									action: 'block', clientIP: '1.1.1.1', clientCountry: 'US',
+									clientRequestHTTPMethodName: 'GET', clientRequestHTTPHost: 'a.example.com',
+									clientRequestPath: '/', userAgent: 'UA', ruleId: 'r1', description: 'd1',
+								}] },
+								{ firewallEventsAdaptive: [{
+									rayName: 'zone2-event', datetime: new Date().toISOString(),
+									action: 'challenge', clientIP: '2.2.2.2', clientCountry: 'JP',
+									clientRequestHTTPMethodName: 'POST', clientRequestHTTPHost: 'b.example.com',
+									clientRequestPath: '/x', userAgent: 'UA', ruleId: 'r2', description: 'd2',
+								}] },
+							]
+						}
+					}
+				}), { status: 200 })
+			);
+			const result = await worker.checkSecurityEvents();
+			expect(result.success).toBe(true);
+		});
+
+		it('should handle missing zones array (zones undefined)', async () => {
+			(global.fetch as any).mockImplementationOnce(async () =>
+				new Response(JSON.stringify({ data: { viewer: {} } }), { status: 200 })
+			);
+			const result = await worker.checkSecurityEvents();
+			expect(result.success).toBe(true);
 		});
 	});
 

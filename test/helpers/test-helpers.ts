@@ -1,10 +1,13 @@
 import { vi } from 'vitest';
 import { env } from 'cloudflare:test';
 
-// Type assertion for env with required properties
+// Type assertion for env with required properties.
+// In vitest miniflare we inject a plain string for the secret binding via
+// `bindings:` in vitest.config.ts, so the helper-level type is `string`.
+// Production type (object with async `.get()`) is normalised by `readApiToken()`.
 export const testEnv = env as typeof env & {
 	CLOUDFLARE_API_TOKEN: string;
-	CLOUDFLARE_ZONE_ID: string;
+	CLOUDFLARE_ZONE_IDS: string;
 	NOTIFICATION_MANAGER: DurableObjectNamespace;
 	PROCESSED_EVENTS: KVNamespace;
 };
@@ -115,9 +118,10 @@ export function mockDurableObjectStub() {
 	};
 }
 
-// Setup test environment
+// Setup test environment (binding 値は vitest.config.ts の miniflare.bindings で
+// 既に inject 済み。setupTestEnvironment は fetch mock の reset と互換のため残す)
 export function setupTestEnvironment() {
 	testEnv.CLOUDFLARE_API_TOKEN = 'test-token';
-	testEnv.CLOUDFLARE_ZONE_ID = 'test-zone-id';
+	testEnv.CLOUDFLARE_ZONE_IDS = 'test-zone-id-1,test-zone-id-2';
 	mockFetch();
 }

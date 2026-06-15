@@ -22,13 +22,24 @@ npm install
 wrangler kv:namespace create "PROCESSED_EVENTS"
 ```
 
-3. シークレットを設定:
-```bash
-wrangler secret put CLOUDFLARE_API_TOKEN
-wrangler secret put CLOUDFLARE_ZONE_ID
+3. zone ID を設定 (zone ID は機密ではないので plain vars に直書き):
+```jsonc
+// wrangler.jsonc
+"vars": {
+  "CLOUDFLARE_ZONE_IDS": "<zone-id-1>,<zone-id-2>"
+}
 ```
 
-4. `wrangler.jsonc`にKV名前空間IDを設定
+4. API token を CF Secrets Store に投入 (値は context に出さない):
+```bash
+# Cloudflare dashboard で zone analytics:read 権限の API token を発行してから:
+echo -n '<token値>' | bash ~/.claude/skills/secret-inject/scripts/inject-secret.sh \
+  security-notification-app-cf-api-token --targets gcp,cf
+```
+
+CF Secrets Store の `bd7bc91a3e5f4111add4acf6cb4b8733/security-notification-app-cf-api-token` に入り、`wrangler.jsonc` の `secrets_store_secrets` binding 経由で `env.CLOUDFLARE_API_TOKEN.get()` から読める。
+
+5. `wrangler.jsonc`にKV名前空間IDを設定
 
 5. デプロイ:
 ```bash
