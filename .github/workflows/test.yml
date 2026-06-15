@@ -21,10 +21,10 @@ jobs:
       has_tests: true
       post_install_script: 'npx wrangler types'
       test_command: 'npx vitest run --coverage'
-      # main push (= PR merge) で staging env (`security-notification-app-staging`) へ
-      # 自動 deploy。tag push (`v*`) で root config (= prod `security-notification-app`)
-      # へ deploy。caller で deploy_*_script を指定しないと frontend-ci.yml は deploy
-      # job 自体を skip する (cf-billing-monitor / HCReaderWorker と同じ pattern)。
-      deploy_staging_script: 'npx wrangler deploy --env staging'
+      # single-env 運用 (staging = prod): PR run の deploy-staging job と tag push の
+      # deploy-release job は共に root config (= 唯一の worker
+      # `security-notification-app`) を deploy する。cf-billing-monitor /
+      # HealthConnectReaderWorker と同じ pattern。
+      deploy_staging_script: 'npx wrangler deploy'
       deploy_release_script: 'npx wrangler deploy'
     secrets: inherit

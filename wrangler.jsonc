@@ -59,43 +59,5 @@
 			"store_id": "bd7bc91a3e5f4111add4acf6cb4b8733",
 			"secret_name": "security-notification-app-cf-api-token"
 		}
-	],
-	"env": {
-		"staging": {
-			"name": "security-notification-app-staging",
-			"durable_objects": {
-				"bindings": [
-					{
-						"class_name": "NotificationManager",
-						"name": "NOTIFICATION_MANAGER"
-					}
-				]
-			},
-			"kv_namespaces": [
-				{
-					"binding": "PROCESSED_EVENTS",
-					"id": "78e463be2e6846d68afcde0fe204ccdf",
-					"preview_id": "78e463be2e6846d68afcde0fe204ccdf"
-				}
-			],
-			"send_email": [
-				{
-					"name": "EMAIL",
-					"destination_address": "m.tama.ramu@gmail.com"
-				}
-			],
-			"vars": {
-				"CLOUDFLARE_ZONE_IDS": "2eb0f540aaf601916d2749c88ad005aa,f95be7b0a4ca5b49ed6ca5dd448511b0",
-				"NOTIFY_EMAIL_FROM": "security-alert@mtamaramu.com",
-				"NOTIFY_EMAIL_TO": "m.tama.ramu@gmail.com"
-			},
-			"secrets_store_secrets": [
-				{
-					"binding": "CLOUDFLARE_API_TOKEN",
-					"store_id": "bd7bc91a3e5f4111add4acf6cb4b8733",
-					"secret_name": "security-notification-app-cf-api-token"
-				}
-			]
-		}
-	}
+	]
 }
