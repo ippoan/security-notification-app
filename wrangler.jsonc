@@ -31,6 +31,12 @@
 			"preview_id": "78e463be2e6846d68afcde0fe204ccdf"
 		}
 	],
+	"send_email": [
+		{
+			"name": "EMAIL",
+			"destination_address": "m.tama.ramu@gmail.com"
+		}
+	],
 	"triggers": {
 		"crons": [
 			"*/5 * * * *"
@@ -62,6 +68,12 @@
 					"binding": "PROCESSED_EVENTS",
 					"id": "78e463be2e6846d68afcde0fe204ccdf",
 					"preview_id": "78e463be2e6846d68afcde0fe204ccdf"
+				}
+			],
+			"send_email": [
+				{
+					"name": "EMAIL",
+					"destination_address": "m.tama.ramu@gmail.com"
 				}
 			],
 			"vars": {

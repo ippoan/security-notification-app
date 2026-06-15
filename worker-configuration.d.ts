@@ -7,6 +7,7 @@ declare namespace Cloudflare {
 		CLOUDFLARE_API_TOKEN: string;
 		CLOUDFLARE_ZONE_ID: string;
 		NOTIFICATION_MANAGER: DurableObjectNamespace<import("./src/index").NotificationManager>;
+		EMAIL: SendEmail;
 	}
 }
 interface Env extends Cloudflare.Env {}

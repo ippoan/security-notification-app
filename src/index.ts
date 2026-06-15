@@ -1,5 +1,8 @@
 import { DurableObject, WorkerEntrypoint, RpcTarget } from "cloudflare:workers";
 
+const EMAIL_FROM = "security-alert@mtamaramu.com";
+const EMAIL_TO = "m.tama.ramu@gmail.com";
+
 interface NotificationEndpoint {
 	id: string;
 	name: string;
@@ -181,9 +184,9 @@ export class NotificationManager extends DurableObject<Env> {
 						console.error(`Failed to send batch to Slack ${endpoint.name}:`, err)
 					);
 				case 'email':
-					// Email implementation would go here
-					console.log(`Email notification to ${endpoint.email} for ${events.length} events`);
-					return Promise.resolve();
+					return this.sendEmailBatch(events).catch(err =>
+						console.error(`Failed to send email batch to ${endpoint.name}:`, err)
+					);
 			}
 		});
 
@@ -313,6 +316,57 @@ export class NotificationManager extends DurableObject<Env> {
 		if (!response.ok) {
 			throw new Error(`Slack webhook batch failed: ${response.status}`);
 		}
+	}
+
+	private async sendEmailBatch(events: SecurityEvent[]): Promise<void> {
+		const eventsSummary = events.reduce((acc, event) => {
+			acc[event.action] = (acc[event.action] || 0) + 1;
+			return acc;
+		}, {} as Record<string, number>);
+
+		const summaryText = Object.entries(eventsSummary)
+			.map(([action, count]) => `${action.toUpperCase()}: ${count}`)
+			.join(', ');
+
+		const subject = `[CF Security] ${events.length} events detected (${summaryText})`;
+
+		const rows = events.slice(0, 20).map(e => `
+			<tr>
+				<td>${escapeHtml(new Date(e.timestamp).toLocaleString())}</td>
+				<td>${escapeHtml(e.action)}</td>
+				<td>${escapeHtml(e.clientIP)}</td>
+				<td>${escapeHtml(e.country)}</td>
+				<td>${escapeHtml(e.method)}</td>
+				<td>${escapeHtml(e.host)}${escapeHtml(e.uri)}</td>
+				<td>${escapeHtml(e.ruleName)}</td>
+			</tr>
+		`).join('');
+
+		const moreNote = events.length > 20 ? `<p>... and ${events.length - 20} more events</p>` : '';
+
+		const html = `<!DOCTYPE html>
+<html><body style="font-family: sans-serif;">
+<h2>🚨 ${events.length} Cloudflare Security Events</h2>
+<p><b>Summary:</b> ${escapeHtml(summaryText)}</p>
+<p><b>Time range:</b> ${escapeHtml(new Date(events[events.length - 1].timestamp).toLocaleString())} - ${escapeHtml(new Date(events[0].timestamp).toLocaleString())}</p>
+<table border="1" cellpadding="4" cellspacing="0" style="border-collapse: collapse;">
+	<thead><tr><th>Time</th><th>Action</th><th>Client IP</th><th>Country</th><th>Method</th><th>Host/URI</th><th>Rule</th></tr></thead>
+	<tbody>${rows}</tbody>
+</table>
+${moreNote}
+</body></html>`;
+
+		const { EmailMessage } = await import("cloudflare:email");
+		const { createMimeMessage } = await import("mimetext");
+
+		const msg = createMimeMessage();
+		msg.setSender({ name: "CF Security Notifier", addr: EMAIL_FROM });
+		msg.setRecipient(EMAIL_TO);
+		msg.setSubject(subject);
+		msg.addMessage({ contentType: "text/html", data: html });
+
+		const emailMessage = new EmailMessage(EMAIL_FROM, EMAIL_TO, msg.asRaw());
+		await this.env.EMAIL.send(emailMessage);
 	}
 
 	// 個別送信用メソッド（現在は未使用、バッチ送信を推奨）
@@ -482,4 +536,13 @@ export default class SecurityNotificationWorker extends WorkerEntrypoint<Env> {
 		const notificationManager = env.NOTIFICATION_MANAGER.get(env.NOTIFICATION_MANAGER.idFromName("global"));
 		await notificationManager.checkAndNotifySecurityEvents();
 	}
+}
+
+function escapeHtml(s: string): string {
+	return s
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;')
+		.replace(/'/g, '&#39;');
 }
