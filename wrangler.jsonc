@@ -49,14 +49,17 @@
 		"enabled": true
 	},
 	"vars": {
-		"CLOUDFLARE_API_TOKEN": "",
-		"CLOUDFLARE_ZONE_ID": "",
+		"CLOUDFLARE_ZONE_IDS": "2eb0f540aaf601916d2749c88ad005aa,f95be7b0a4ca5b49ed6ca5dd448511b0",
 		"NOTIFY_EMAIL_FROM": "security-alert@mtamaramu.com",
 		"NOTIFY_EMAIL_TO": "m.tama.ramu@gmail.com"
 	},
-	"secrets": {
-		"required": []
-	},
+	"secrets_store_secrets": [
+		{
+			"binding": "CLOUDFLARE_API_TOKEN",
+			"store_id": "bd7bc91a3e5f4111add4acf6cb4b8733",
+			"secret_name": "security-notification-app-cf-api-token"
+		}
+	],
 	"env": {
 		"staging": {
 			"name": "security-notification-app-staging",
@@ -82,14 +85,17 @@
 				}
 			],
 			"vars": {
-				"CLOUDFLARE_API_TOKEN": "",
-				"CLOUDFLARE_ZONE_ID": "",
+				"CLOUDFLARE_ZONE_IDS": "2eb0f540aaf601916d2749c88ad005aa,f95be7b0a4ca5b49ed6ca5dd448511b0",
 				"NOTIFY_EMAIL_FROM": "security-alert@mtamaramu.com",
 				"NOTIFY_EMAIL_TO": "m.tama.ramu@gmail.com"
 			},
-			"secrets": {
-				"required": []
-			}
+			"secrets_store_secrets": [
+				{
+					"binding": "CLOUDFLARE_API_TOKEN",
+					"store_id": "bd7bc91a3e5f4111add4acf6cb4b8733",
+					"secret_name": "security-notification-app-cf-api-token"
+				}
+			]
 		}
 	}
 }

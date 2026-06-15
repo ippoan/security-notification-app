@@ -11,6 +11,13 @@ export default defineWorkersConfig({
 					// Required to use `SELF.scheduled()`. This is an experimental
 					// compatibility flag, and cannot be enabled in production.
 					compatibilityFlags: ["service_binding_extra_handlers"],
+					// miniflare はまだ secrets_store_secrets を natively support して
+					// いないので、test では plain string で override する。
+					// src 側の `readApiToken()` が string / { get() } 両方を normalize する。
+					bindings: {
+						CLOUDFLARE_API_TOKEN: "test-token",
+						CLOUDFLARE_ZONE_IDS: "test-zone-id-1,test-zone-id-2",
+					},
 				},
 			}
 		},

@@ -1,5 +1,16 @@
 import { DurableObject, WorkerEntrypoint, RpcTarget } from "cloudflare:workers";
 
+// CF Secrets Store binding (`secrets_store_secrets`) is exposed in production
+// as an object with async `.get()`. In vitest (miniflare lacks a Secrets Store
+// provider) we inject a plain string via `bindings: { CLOUDFLARE_API_TOKEN: "..." }`,
+// so the helper accepts both shapes.
+type SecretsStoreBinding = { get(): Promise<string> };
+
+async function readApiToken(env: Env): Promise<string> {
+	const t = (env as unknown as { CLOUDFLARE_API_TOKEN: SecretsStoreBinding | string }).CLOUDFLARE_API_TOKEN;
+	return typeof t === 'string' ? t : await t.get();
+}
+
 interface NotificationEndpoint {
 	id: string;
 	name: string;
@@ -88,9 +99,17 @@ export class NotificationManager extends DurableObject<Env> {
 	}
 
 	private async fetchSecurityEvents(startTime: Date, endTime: Date): Promise<SecurityEvent[]> {
+		const zoneIds = this.env.CLOUDFLARE_ZONE_IDS
+			.split(',')
+			.map((s) => s.trim())
+			.filter(Boolean);
+
+		const apiToken = await readApiToken(this.env);
+		const zoneTagsLiteral = JSON.stringify(zoneIds);
+
 		const query = `query {
 			viewer {
-				zones(filter: { zoneTag: "${this.env.CLOUDFLARE_ZONE_ID}" }) {
+				zones(filter: { zoneTag_in: ${zoneTagsLiteral} }) {
 					firewallEventsAdaptive(
 						filter: {
 							datetime_geq: "${startTime.toISOString()}"
@@ -119,7 +138,7 @@ export class NotificationManager extends DurableObject<Env> {
 		const response = await fetch('https://api.cloudflare.com/client/v4/graphql', {
 			method: 'POST',
 			headers: {
-				'Authorization': `Bearer ${this.env.CLOUDFLARE_API_TOKEN}`,
+				'Authorization': `Bearer ${apiToken}`,
 				'Content-Type': 'application/json',
 			},
 			body: JSON.stringify({ query }),
@@ -135,7 +154,8 @@ export class NotificationManager extends DurableObject<Env> {
 			throw new Error(`GraphQL error: ${data.errors[0].message}`);
 		}
 
-		const events = data.data?.viewer?.zones?.[0]?.firewallEventsAdaptive ?? [];
+		const zones = data.data?.viewer?.zones ?? [];
+		const events = zones.flatMap((zone: any) => zone.firewallEventsAdaptive ?? []);
 
 		return events.map((event: any) => ({
 			id: event.rayName,

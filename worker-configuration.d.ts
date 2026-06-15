@@ -4,8 +4,11 @@
 declare namespace Cloudflare {
 	interface Env {
 		PROCESSED_EVENTS: KVNamespace;
-		CLOUDFLARE_API_TOKEN: string;
-		CLOUDFLARE_ZONE_ID: string;
+		// CF Secrets Store binding in production (object with async `.get()`).
+		// In vitest miniflare we inject a plain string via `bindings:`, so the
+		// type accepts both shapes and `readApiToken()` normalises.
+		CLOUDFLARE_API_TOKEN: SecretsStoreSecret | string;
+		CLOUDFLARE_ZONE_IDS: string;
 		NOTIFY_EMAIL_FROM: string;
 		NOTIFY_EMAIL_TO: string;
 		NOTIFICATION_MANAGER: DurableObjectNamespace<import("./src/index").NotificationManager>;
