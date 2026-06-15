@@ -325,6 +325,38 @@ describe('Durable Objects', () => {
 			testEnv.PROCESSED_EVENTS.put = originalPut;
 		});
 
+		it('should resend already-processed events when force=true', async () => {
+			const id = testEnv.NOTIFICATION_MANAGER.idFromName('test-force-resend');
+			const stub = testEnv.NOTIFICATION_MANAGER.get(id);
+			await stub.addEndpoint(createTestEndpoint({ enabled: true }));
+
+			let webhookCalled = false;
+			(global.fetch as any).mockImplementation((url: string) => {
+				if (url.includes('api.cloudflare.com')) {
+					return Promise.resolve(createGraphQLSecurityResponse([{
+						ray_id: 'force-ev-1', action: 'block', client_ip: '8.8.8.8',
+						country: 'US', method: 'GET', host: 'example.com', uri: '/f',
+						user_agent: 'UA', rule_id: 'r', rule_message: 'Blocked'
+					}]));
+				}
+				if (url.includes('example.com')) {
+					webhookCalled = true;
+					return Promise.resolve(new Response('OK', { status: 200 }));
+				}
+				return Promise.resolve(new Response('Not Found', { status: 404 }));
+			});
+
+			// KV reports the event as already processed; force must bypass dedupe + threshold
+			const originalGet = testEnv.PROCESSED_EVENTS.get;
+			testEnv.PROCESSED_EVENTS.get = vi.fn().mockResolvedValue('exists');
+
+			await stub.checkAndNotifySecurityEvents(true);
+
+			expect(webhookCalled).toBe(true);
+
+			testEnv.PROCESSED_EVENTS.get = originalGet;
+		});
+
 		it('should handle empty result array from API', async () => {
 			const id = testEnv.NOTIFICATION_MANAGER.idFromName('test-empty-result');
 			const stub = testEnv.NOTIFICATION_MANAGER.get(id);
