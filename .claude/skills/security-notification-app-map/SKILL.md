@@ -2,7 +2,7 @@
 name: security-notification-app-map
 generated-from: security-notification-app:8dc16190def60c5914d87f853bdb4b4a3fe05cd7
 paths: [src/]
-description: ippoan/security-notification-app (Cloudflare Workers + Durable Object、Cloudflare WAF firewall events を 5 分おきに集約して email / webhook / Slack に通知) の構造ナビゲーション。GraphQL Analytics で `firewallEventsAdaptive` を multi-zone (`zoneTag_in`) で aggregate、KV (`PROCESSED_EVENTS`) で 24h dedupe、DO (`NotificationManager`) で endpoint CRUD と通知配信。CF Secrets Store binding (`CLOUDFLARE_API_TOKEN`) と plain vars (`CLOUDFLARE_ZONE_IDS` comma-separated) の組み合わせ、single-env 運用、Workers Observability への構造化 log の配置と gotcha を 1 枚にまとめる。トリガー:「security-notification-app」「security-notifier」「firewall events」「WAF block 通知」「CLOUDFLARE_ZONE_IDS」「firewallEventsAdaptive」「checkAndNotifySecurityEvents」「/api/check-events」「security_events_detected log」「NotificationManager DO」等。
+description: ippoan/security-notification-app (Cloudflare Workers + Durable Object、Cloudflare WAF firewall events を毎日 6:00 JST に過去 24h 分集約して email / webhook / Slack に通知) の構造ナビゲーション。GraphQL Analytics で `firewallEventsAdaptive` を multi-zone (`zoneTag_in`) で aggregate、KV (`PROCESSED_EVENTS`) で 48h dedupe (24h window x 2 で境界重複吸収)、DO (`NotificationManager`) で endpoint CRUD と通知配信。CF Secrets Store binding (`CLOUDFLARE_API_TOKEN`) と plain vars (`CLOUDFLARE_ZONE_IDS` comma-separated) の組み合わせ、single-env 運用、Workers Observability への構造化 log の配置と gotcha を 1 枚にまとめる。トリガー:「security-notification-app」「security-notifier」「firewall events」「WAF block 通知」「CLOUDFLARE_ZONE_IDS」「firewallEventsAdaptive」「checkAndNotifySecurityEvents」「/api/check-events」「security_events_detected log」「NotificationManager DO」等。
 ---
 
 # security-notification-app-map — ippoan/security-notification-app 構造ナビゲーション
@@ -43,7 +43,7 @@ Slack endpoint へ通知する単一 Worker。
 
 | trigger | flow |
 |---|---|
-| **cron** `*/5 * * * *` | `scheduled` → DO `idFromName("global")` → `checkAndNotifySecurityEvents` |
+| **cron** `0 21 * * *` (= 06:00 JST 毎日) | `scheduled` → DO `idFromName("global")` → `checkAndNotifySecurityEvents` (過去 24h を集約) |
 | **手動** `POST /api/check-events` | 同上、即時実行 |
 | **RPC** (`env.SECURITY_NOTIFIER.checkSecurityEvents()` 等) | 他 worker から service binding 経由 |
 
@@ -53,7 +53,7 @@ Slack endpoint へ通知する単一 Worker。
 - **`CLOUDFLARE_API_TOKEN` は CF Secrets Store binding**: `bd7bc91a3e5f4111add4acf6cb4b8733` / `security-notification-app-cf-api-token`。GCP Secret Manager にも同名 backup、`secret-verify-gcp.yml` が CI で突合。`secrets.required` は **わざと書かない** (wrangler 4.79+ が secrets_store binding 名と衝突して deploy 落ちるため、HCReaderWorker と同様)。
 - **`CLOUDFLARE_ZONE_IDS` は plain vars 直書き** (機密ではないため、cf-billing-monitor の `CF_ACCOUNT_ID` と同パターン)。**comma-separated で複数 zone** を渡せる (`zone1,zone2`)。worker が split + `JSON.stringify` して GraphQL `zoneTag_in: [...]` で multi-zone aggregate (PR #12)。
 - **GraphQL field 名は `clientCountryName`** (`clientCountry` ではない、PR #15 で 1 度踏んだ)。`firewallEventsAdaptive` の field 名は CF 側の schema 進化に追従が必要。
-- **24h KV dedupe**: 各 event の Ray ID を key にして `PROCESSED_EVENTS` KV に 24h TTL で書く (`event:<rayId>`)。同じ event は再通知しない (cron 連発で email スパムにならない設計)。`sendNotificationsBatch` の前に `console.log('security_events_detected', ...)` で構造化 log も出力 (PR #16) — CCoW から `cf_logging` MCP で過去 events を query 可能。
+- **48h KV dedupe**: 各 event の Ray ID を key にして `PROCESSED_EVENTS` KV に 48h TTL で書く (`event:<rayId>`)。fetch window が 24h なので TTL=48h で境界重複 (前日の cron で投げ損ねた event が翌日 window にもう一度入る等) を吸収する。`sendNotificationsBatch` の前に `console.log('security_events_detected', ...)` で構造化 log も出力 (PR #16) — CCoW から `cf_logging` MCP で過去 events を query 可能。
 - **email は常時送信**: PR #10 で `sendNotificationsBatch` 冒頭で `sendEmailBatch` を必ず呼ぶ。endpoint 登録不要 (endpoint type `email` は no-op)。webhook / Slack は endpoint 登録された分だけ追加で送る。
 - **`send_email` binding** (`EMAIL`): `cloudflare:email` + `mimetext` で送信。`destination_address` は `wrangler.jsonc` の `[[send_email]]` で **静的固定** (Email Routing の制約)。From/To を変える時は `vars.NOTIFY_EMAIL_FROM` / `NOTIFY_EMAIL_TO` と `[[send_email]] destination_address` の **両方**を更新する必要あり。
 - **`cloudflare:email` は vitest-pool-workers v0.5 で module 解決失敗**: `sendEmailBatch` は dynamic import (`await import('cloudflare:email')`)。test では mock 不要 (path に到達しない or dynamic import が catch される)。
