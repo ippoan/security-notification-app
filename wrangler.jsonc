@@ -52,6 +52,9 @@
 		"CLOUDFLARE_API_TOKEN": "",
 		"CLOUDFLARE_ZONE_ID": ""
 	},
+	"secrets": {
+		"required": []
+	},
 	"env": {
 		"staging": {
 			"name": "security-notification-app-staging",
@@ -79,6 +82,9 @@
 			"vars": {
 				"CLOUDFLARE_API_TOKEN": "",
 				"CLOUDFLARE_ZONE_ID": ""
+			},
+			"secrets": {
+				"required": []
 			}
 		}
 	}
