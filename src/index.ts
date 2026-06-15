@@ -123,7 +123,7 @@ export class NotificationManager extends DurableObject<Env> {
 						datetime
 						action
 						clientIP
-						clientCountry
+						clientCountryName
 						clientRequestHTTPMethodName
 						clientRequestHTTPHost
 						clientRequestPath
@@ -162,7 +162,7 @@ export class NotificationManager extends DurableObject<Env> {
 			timestamp: event.datetime,
 			action: event.action,
 			clientIP: event.clientIP,
-			country: event.clientCountry,
+			country: event.clientCountryName,
 			method: event.clientRequestHTTPMethodName,
 			host: event.clientRequestHTTPHost,
 			uri: event.clientRequestPath,
