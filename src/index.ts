@@ -83,8 +83,26 @@ export class NotificationManager extends DurableObject<Env> {
 			
 			// Send all unprocessed events in a single batch
 			if (unprocessedEvents.length > 0) {
+				// 構造化 log: Workers Observability から `event:` フィルタで
+				// query 可能。email を開かなくても CCoW セッションから
+				// `cf_logging` MCP で attacker IP / rule 等を確認できる。
+				console.log('security_events_detected', JSON.stringify({
+					count: unprocessedEvents.length,
+					events: unprocessedEvents.map((e) => ({
+						id: e.id,
+						timestamp: e.timestamp,
+						action: e.action,
+						clientIP: e.clientIP,
+						country: e.country,
+						method: e.method,
+						host: e.host,
+						uri: e.uri,
+						ruleName: e.ruleName,
+					})),
+				}));
+
 				await this.sendNotificationsBatch(unprocessedEvents);
-				
+
 				// Mark all events as processed
 				for (const event of unprocessedEvents) {
 					const eventKey = `event:${event.id}`;
