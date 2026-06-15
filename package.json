@@ -11,6 +11,9 @@
 		"test:watch": "vitest --watch",
 		"test:coverage": "vitest run --coverage"
 	},
+	"dependencies": {
+		"mimetext": "^3.0.24"
+	},
 	"devDependencies": {
 		"@cloudflare/vitest-pool-workers": "^0.5.41",
 		"@cloudflare/workers-types": "^4.20241127.0",

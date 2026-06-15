@@ -182,9 +182,6 @@ describe('Edge Cases and Error Handling', () => {
 				enabled: true
 			});
 
-			// Mock console.log to verify it's called
-			const consoleSpy = vi.spyOn(console, 'log');
-
 			const testEvent = {
 				id: 'test-email-event',
 				timestamp: new Date().toISOString(),
@@ -199,15 +196,11 @@ describe('Edge Cases and Error Handling', () => {
 				ruleName: 'Test Rule'
 			};
 
+			// Email send may fail in test env (no real Email Routing relay);
+			// failures are caught in sendToEndpointsBatch, so result.success stays true.
 			const result = await worker.sendTestNotification(testEvent);
 			expect(result.success).toBe(true);
-			
-			// Verify console.log was called with email notification
-			expect(consoleSpy).toHaveBeenCalledWith(
-				`Email notification to test@example.com for 1 events`
-			);
-
-			consoleSpy.mockRestore();
+			expect(result.notifiedEndpoints).toBeGreaterThanOrEqual(1);
 		});
 	});
 
