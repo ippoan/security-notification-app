@@ -1,4 +1,13 @@
 import { DurableObject, WorkerEntrypoint, RpcTarget } from "cloudflare:workers";
+import {
+	parseClassifyConfig,
+	parseMinEvents,
+	summarize,
+	classificationSubjectSuffix,
+	renderClassificationHtml,
+	renderClassificationMrkdwn,
+	type ClassifyEnv,
+} from "./classify";
 
 // CF Secrets Store binding (`secrets_store_secrets`) is exposed in production
 // as an object with async `.get()`. In vitest (miniflare lacks a Secrets Store
@@ -83,11 +92,16 @@ export class NotificationManager extends DurableObject<Env> {
 			
 			// Send all unprocessed events in a single batch
 			if (unprocessedEvents.length > 0) {
+				const cfg = parseClassifyConfig(this.env as unknown as ClassifyEnv);
+				const summary = summarize(unprocessedEvents, cfg);
+
 				// 構造化 log: Workers Observability から `event:` フィルタで
 				// query 可能。email を開かなくても CCoW セッションから
-				// `cf_logging` MCP で attacker IP / rule 等を確認できる。
+				// `cf_logging` MCP で attacker IP / rule / CF Access 分類を確認できる。
 				console.log('security_events_detected', JSON.stringify({
 					count: unprocessedEvents.length,
+					actionable: summary.actionableCount,
+					categories: summary.buckets.map((b) => ({ category: b.category, count: b.count })),
 					events: unprocessedEvents.map((e) => ({
 						id: e.id,
 						timestamp: e.timestamp,
@@ -101,7 +115,12 @@ export class NotificationManager extends DurableObject<Env> {
 					})),
 				}));
 
-				await this.sendNotificationsBatch(unprocessedEvents);
+				// 件数閾値: 新規 event が NOTIFY_MIN_EVENTS 未満なら通知を抑制
+				// (observability log は残す)。既定 1 = 現状維持。dedupe のため
+				// 通知有無に関わらず processed mark は付ける。
+				if (unprocessedEvents.length >= parseMinEvents(this.env as unknown as ClassifyEnv)) {
+					await this.sendNotificationsBatch(unprocessedEvents);
+				}
 
 				// Mark all events as processed
 				for (const event of unprocessedEvents) {
@@ -267,6 +286,7 @@ export class NotificationManager extends DurableObject<Env> {
 	// }
 
 	private async sendWebhookBatch(url: string, events: SecurityEvent[]): Promise<void> {
+		const summary = summarize(events, parseClassifyConfig(this.env as unknown as ClassifyEnv));
 		const response = await fetch(url, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -274,6 +294,10 @@ export class NotificationManager extends DurableObject<Env> {
 				type: 'cloudflare_security_events_batch',
 				events: events,
 				count: events.length,
+				classification: {
+					actionable: summary.actionableCount,
+					categories: summary.buckets,
+				},
 				timestamp: new Date().toISOString()
 			})
 		});
@@ -293,6 +317,8 @@ export class NotificationManager extends DurableObject<Env> {
 			.map(([action, count]) => `${action.toUpperCase()}: ${count}`)
 			.join(', ');
 
+		const summary = summarize(events, parseClassifyConfig(this.env as unknown as ClassifyEnv));
+
 		const blocks: any[] = [
 			{
 				type: 'header',
@@ -306,6 +332,13 @@ export class NotificationManager extends DurableObject<Env> {
 				text: {
 					type: 'mrkdwn',
 					text: `*Summary:* ${summaryText}\n*Time Range (JST):* ${formatJst(events[0].timestamp)} - ${formatJst(events[events.length - 1].timestamp)}`
+				}
+			},
+			{
+				type: 'section',
+				text: {
+					type: 'mrkdwn',
+					text: `*CF Access 分類:*\n${renderClassificationMrkdwn(summary)}`
 				}
 			}
 		];
@@ -369,7 +402,8 @@ export class NotificationManager extends DurableObject<Env> {
 			.map(([action, count]) => `${action.toUpperCase()}: ${count}`)
 			.join(', ');
 
-		const subject = `[CF Security] ${events.length} events detected (${summaryText})`;
+		const summary = summarize(events, parseClassifyConfig(this.env as unknown as ClassifyEnv));
+		const subject = `[CF Security] ${events.length} events detected (${summaryText})${classificationSubjectSuffix(summary)}`;
 
 		const rows = events.slice(0, 20).map(e => `
 			<tr>
@@ -390,6 +424,7 @@ export class NotificationManager extends DurableObject<Env> {
 <h2>🚨 ${events.length} Cloudflare Security Events</h2>
 <p><b>Summary:</b> ${escapeHtml(summaryText)}</p>
 <p><b>Time range (JST):</b> ${escapeHtml(formatJst(events[events.length - 1].timestamp))} - ${escapeHtml(formatJst(events[0].timestamp))}</p>
+${renderClassificationHtml(summary, escapeHtml)}
 <table border="1" cellpadding="4" cellspacing="0" style="border-collapse: collapse;">
 	<thead><tr><th>Time (JST)</th><th>Action</th><th>Client IP</th><th>Country</th><th>Method</th><th>Host/URI</th><th>Rule</th></tr></thead>
 	<tbody>${rows}</tbody>
