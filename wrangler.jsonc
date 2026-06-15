@@ -50,7 +50,9 @@
 	},
 	"vars": {
 		"CLOUDFLARE_API_TOKEN": "",
-		"CLOUDFLARE_ZONE_ID": ""
+		"CLOUDFLARE_ZONE_ID": "",
+		"NOTIFY_EMAIL_FROM": "security-alert@mtamaramu.com",
+		"NOTIFY_EMAIL_TO": "m.tama.ramu@gmail.com"
 	},
 	"secrets": {
 		"required": []
@@ -81,7 +83,9 @@
 			],
 			"vars": {
 				"CLOUDFLARE_API_TOKEN": "",
-				"CLOUDFLARE_ZONE_ID": ""
+				"CLOUDFLARE_ZONE_ID": "",
+				"NOTIFY_EMAIL_FROM": "security-alert@mtamaramu.com",
+				"NOTIFY_EMAIL_TO": "m.tama.ramu@gmail.com"
 			},
 			"secrets": {
 				"required": []

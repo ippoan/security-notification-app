@@ -1,8 +1,5 @@
 import { DurableObject, WorkerEntrypoint, RpcTarget } from "cloudflare:workers";
 
-const EMAIL_FROM = "security-alert@mtamaramu.com";
-const EMAIL_TO = "m.tama.ramu@gmail.com";
-
 interface NotificationEndpoint {
 	id: string;
 	name: string;
@@ -163,9 +160,15 @@ export class NotificationManager extends DurableObject<Env> {
 	}
 
 	async sendNotificationsBatch(events: SecurityEvent[]): Promise<void> {
+		if (events.length === 0) return;
+
+		// Email は endpoint 登録に依存せず常に送る (NOTIFY_EMAIL_TO 宛)
+		await this.sendEmailBatch(events).catch(err =>
+			console.error('Failed to send email batch:', err)
+		);
+
 		const endpoints = await this.getEndpoints();
 		const activeEndpoints = endpoints.filter(ep => ep.enabled);
-
 		await this.sendToEndpointsBatch(activeEndpoints, events);
 	}
 
@@ -173,6 +176,8 @@ export class NotificationManager extends DurableObject<Env> {
 		if (events.length === 0) return;
 
 		// Send to each endpoint with all events in a single notification
+		// (email は sendNotificationsBatch で env vars 宛に常時送信されるため、
+		// endpoint type 'email' は no-op として無視する)
 		const promises = endpoints.map(endpoint => {
 			switch (endpoint.type) {
 				case 'webhook':
@@ -184,9 +189,7 @@ export class NotificationManager extends DurableObject<Env> {
 						console.error(`Failed to send batch to Slack ${endpoint.name}:`, err)
 					);
 				case 'email':
-					return this.sendEmailBatch(events).catch(err =>
-						console.error(`Failed to send email batch to ${endpoint.name}:`, err)
-					);
+					return Promise.resolve();
 			}
 		});
 
@@ -359,13 +362,16 @@ ${moreNote}
 		const { EmailMessage } = await import("cloudflare:email");
 		const { createMimeMessage } = await import("mimetext");
 
+		const from = this.env.NOTIFY_EMAIL_FROM;
+		const to = this.env.NOTIFY_EMAIL_TO;
+
 		const msg = createMimeMessage();
-		msg.setSender({ name: "CF Security Notifier", addr: EMAIL_FROM });
-		msg.setRecipient(EMAIL_TO);
+		msg.setSender({ name: "CF Security Notifier", addr: from });
+		msg.setRecipient(to);
 		msg.setSubject(subject);
 		msg.addMessage({ contentType: "text/html", data: html });
 
-		const emailMessage = new EmailMessage(EMAIL_FROM, EMAIL_TO, msg.asRaw());
+		const emailMessage = new EmailMessage(from, to, msg.asRaw());
 		await this.env.EMAIL.send(emailMessage);
 	}
 
