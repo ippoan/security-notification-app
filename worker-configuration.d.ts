@@ -6,6 +6,8 @@ declare namespace Cloudflare {
 		PROCESSED_EVENTS: KVNamespace;
 		CLOUDFLARE_API_TOKEN: string;
 		CLOUDFLARE_ZONE_ID: string;
+		NOTIFY_EMAIL_FROM: string;
+		NOTIFY_EMAIL_TO: string;
 		NOTIFICATION_MANAGER: DurableObjectNamespace<import("./src/index").NotificationManager>;
 		EMAIL: SendEmail;
 	}
