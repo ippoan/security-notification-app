@@ -96,11 +96,13 @@ describe('parseMinEvents', () => {
 });
 
 describe('summarize', () => {
-	it('returns an empty summary for no events', () => {
+	it('returns all 4 zero buckets for no events', () => {
 		const s = summarize([]);
 		expect(s.total).toBe(0);
 		expect(s.actionableCount).toBe(0);
-		expect(s.buckets).toEqual([]);
+		// all 4 categories always present (so ⚠️/❓ show even at 0)
+		expect(s.buckets.map((b) => b.category)).toEqual(['access-candidate', 'unknown', 'gated', 'public']);
+		expect(s.buckets.every((b) => b.count === 0 && b.hosts.length === 0)).toBe(true);
 	});
 
 	it('aggregates by category and host, counting duplicates', () => {
@@ -141,7 +143,7 @@ describe('summarize', () => {
 });
 
 describe('rendering helpers', () => {
-	// 6 distinct unknown hosts -> exercises the "+N hosts" overflow branch (>5)
+	// 6 distinct unknown hosts -> all are listed (no truncation / 細分表示)
 	const manyUnknown = summarize(
 		['a', 'b', 'c', 'd', 'e', 'f'].map((p) => ({ host: `${p}.evil.ru` })),
 	);
@@ -154,22 +156,30 @@ describe('rendering helpers', () => {
 		expect(classificationSubjectSuffix(onlyGated)).toBe('');
 	});
 
-	it('renderClassificationLines truncates hosts past the cap', () => {
-		const lines = renderClassificationLines(manyUnknown);
-		expect(lines).toHaveLength(1);
-		expect(lines[0]).toContain('❓ 不明 (要確認): 6');
-		expect(lines[0]).toContain('+1 hosts'); // 6 hosts, cap 5
-	});
-
-	it('renderClassificationLines without overflow omits the "+N hosts" suffix', () => {
+	it('always renders all 4 category lines (incl 0-count ⚠️/❓), with 0 → なし', () => {
 		const lines = renderClassificationLines(onlyGated);
-		expect(lines[0]).toContain('✅ CF Access 済み: 1');
-		expect(lines[0]).not.toContain('+');
+		expect(lines).toHaveLength(4);
+		expect(lines[0]).toBe('⚠️ 要 CF Access 検討: 0 — なし');
+		expect(lines[1]).toBe('❓ 不明 (要確認): 0 — なし');
+		expect(lines.find((l) => l.startsWith('✅'))).toContain('✅ CF Access 済み: 1 — alc-staging.ippoan.org (1)');
 	});
 
-	it('renderClassificationMrkdwn bullets lines, falls back when empty', () => {
+	it('lists every host without truncation (細分表示)', () => {
+		const lines = renderClassificationLines(manyUnknown);
+		const unknownLine = lines.find((l) => l.startsWith('❓'))!;
+		expect(unknownLine).toContain('❓ 不明 (要確認): 6');
+		expect(unknownLine).not.toContain('+'); // no "+N hosts" cap
+		for (const p of ['a', 'b', 'c', 'd', 'e', 'f']) {
+			expect(unknownLine).toContain(`${p}.evil.ru (1)`);
+		}
+	});
+
+	it('renderClassificationMrkdwn always bullets all 4 categories', () => {
+		const mrkdwn = renderClassificationMrkdwn(empty);
+		expect(mrkdwn.split('\n')).toHaveLength(4);
+		expect(mrkdwn).toContain('• ⚠️ 要 CF Access 検討: 0 — なし');
+		expect(mrkdwn).toContain('• ❓ 不明 (要確認): 0 — なし');
 		expect(renderClassificationMrkdwn(onlyGated)).toContain('• ✅ CF Access 済み: 1');
-		expect(renderClassificationMrkdwn(empty)).toBe('分類対象なし');
 	});
 
 	it('renderClassificationHtml escapes labels/hosts via injected escaper', () => {
@@ -181,6 +191,7 @@ describe('rendering helpers', () => {
 		const html = renderClassificationHtml(onlyGated, escape);
 		expect(html).toContain('<h3>CF Access 観点の分類</h3>');
 		expect(html).toContain('<b>1</b>');
+		expect((html.match(/<li>/g) || []).length).toBe(4); // all 4 categories
 		expect(calls.length).toBeGreaterThan(0); // escaper was invoked
 	});
 });

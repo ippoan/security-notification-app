@@ -47,8 +47,6 @@ export const CATEGORY_LABEL: Record<AccessCategory, string> = {
 	public: '🌐 公開 (Access 不要)',
 };
 
-const MAX_HOSTS_PER_BUCKET = 5;
-
 /** glob 風 (`*` = 任意文字列) パターンで host を完全一致判定する。case-insensitive。 */
 export function matchHostPattern(host: string, pattern: string): boolean {
 	const escaped = pattern
@@ -124,26 +122,23 @@ export function summarize(
 		m.set(e.host, (m.get(e.host) ?? 0) + 1);
 	}
 
-	const buckets: CategoryBucket[] = [];
-	let actionableCount = 0;
-	for (const category of CATEGORY_ORDER) {
+	// 全 4 カテゴリを常に出す (count 0 の ⚠️要対応 / ❓不明 も通知に表示する)。
+	const buckets: CategoryBucket[] = CATEGORY_ORDER.map((category) => {
 		const m = perCategory[category];
-		if (m.size === 0) continue;
 		const hosts = Array.from(m, ([host, count]) => ({ host, count })).sort((a, b) => b.count - a.count);
 		const count = hosts.reduce((sum, h) => sum + h.count, 0);
-		buckets.push({ category, count, hosts });
-		if (category === 'access-candidate' || category === 'unknown') actionableCount += count;
-	}
+		return { category, count, hosts };
+	});
+	const actionableCount = buckets
+		.filter((b) => b.category === 'access-candidate' || b.category === 'unknown')
+		.reduce((sum, b) => sum + b.count, 0);
 	return { total: events.length, actionableCount, buckets };
 }
 
+// host 別の内訳 (全 host を細分表示、上限なし)。0 件カテゴリは "なし"。
 function hostsLine(bucket: CategoryBucket): string {
-	const shown = bucket.hosts
-		.slice(0, MAX_HOSTS_PER_BUCKET)
-		.map((h) => `${h.host} (${h.count})`)
-		.join(', ');
-	const extra = bucket.hosts.length - MAX_HOSTS_PER_BUCKET;
-	return extra > 0 ? `${shown}, +${extra} hosts` : shown;
+	if (bucket.hosts.length === 0) return 'なし';
+	return bucket.hosts.map((h) => `${h.host} (${h.count})`).join(', ');
 }
 
 /** email/Slack の件名末尾に付ける「要対応 N」。0 件なら空文字。 */
@@ -156,10 +151,9 @@ export function renderClassificationLines(summary: ClassifiedSummary): string[] 
 	return summary.buckets.map((b) => `${CATEGORY_LABEL[b.category]}: ${b.count} — ${hostsLine(b)}`);
 }
 
-/** Slack mrkdwn (bullet)。bucket 0 件なら "分類対象なし"。 */
+/** Slack mrkdwn (bullet)。全 4 カテゴリを 1 行ずつ。 */
 export function renderClassificationMrkdwn(summary: ClassifiedSummary): string {
-	const lines = renderClassificationLines(summary);
-	return lines.length > 0 ? lines.map((l) => `• ${l}`).join('\n') : '分類対象なし';
+	return renderClassificationLines(summary).map((l) => `• ${l}`).join('\n');
 }
 
 /** email HTML。escape は呼び出し側の escapeHtml を注入。 */
