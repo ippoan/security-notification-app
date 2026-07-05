@@ -62,6 +62,31 @@ Slack endpoint へ通知する単一 Worker。
 - **PROD worker 名 `security-notification-app`**: workers.dev は `security-notification-app.m-tama-ramu.workers.dev`。CF dashboard では Variables and secrets に `Secrets Store / CLOUDFLARE_API_TOKEN` binding が出る (PR #12 以前は `Plaintext / CLOUDFLARE_API_TOKEN (空)` だった)。
 - **CF Analytics propagation lag**: firewall events が `firewallEventsAdaptive` に乗るまで 30-90 秒。手動 trigger 直後に attack→trigger しても捕捉できないことがあるので、cron 待ちのほうが確実。
 - **Workers Observability log のキー**: `$metadata.service = security-notification-app` + `$metadata.message includes "security_events_detected"` で過去 attack を query 可能。`messageTemplate` は CF が自動 PII redact (`<IP4>` / `<DOMAIN>` / `<DATETIME>`)、生 IP/host が要るときは `message` を見る。
+- **email 本文は上位 20 件で truncate される** (`src/index.ts` の `events.slice(0, 20)` + `... and N more events`)。154 件検出のうち特定 host の全件 (例: 9件+9件) を見たい時、email 本文だけでは足りない。下の「通知メールのトリアージ手順」を使う。
+- **`ACCESS_GATED_PATTERNS` は CF Access の実設定に自動追従しない** (config ベース、live API を叩かないため)。Cloudflare dashboard / `cf-access-mcp` で新規 Access app を host パターンに追加しても、`wrangler.jsonc` 側の `ACCESS_GATED_PATTERNS` を手動で更新しない限り、その host は `*staging*`/`*preview*` 等の `ACCESS_CANDIDATE_PATTERNS` に先に拾われ「⚠️ 要 CF Access 検討」のまま誤表示され続ける。前例: `a483345` (`ui-preview.ippoan.org` 追加) / PR #30 (`*-preview.ippoan.org` 追加、2026-07-05)。新しい Access app を preview/staging/dev 系 host に張ったら、同じ turn で `ACCESS_GATED_PATTERNS` の追記も検討すること。
+
+## 通知メールのトリアージ手順 (2026-07-05 実施、再現用)
+
+「⚠️ 要 CF Access 検討」に挙がった host の全イベントを確認し、必要なら
+`ACCESS_GATED_PATTERNS` を直す一連の作業:
+
+1. **メール本文は最大20件で truncate される**ので、対象 host の全件を見るには
+   `cf_logging` MCP (`query_worker_observability`) で通知送信時刻付近
+   (cron 実行は 06:00 JST = 21:00Z 前後) の `$metadata.service =
+   security-notification-app` + `$metadata.message includes
+   "security_events_detected"` を timeframe 指定で1件 query する。
+   `$metadata.message` に `count/actionable/categories/events[]` を含む
+   JSON 全文 (truncate なし) が入っている。結果が大きい (数万文字) ので
+   ファイル保存された結果を Bash + python (`json.loads`) で host フィルタ
+   するとよい (Read/Grep で直接読むには行が長すぎる)。
+2. 対象 host が既に CF Access で保護されているか
+   `mcp__cf-access-mcp__list_access_apps` (結果が大きいので Bash grep で
+   `-i -E "<host-keyword>|wildcard"` 絞り込み) で確認する。
+3. 保護済みなのに `classifyHost` が `access-candidate`/`unknown` に分類する
+   場合は、`ACCESS_GATED_PATTERNS` (`wrangler.jsonc`) にそのホストパターンを
+   追記する (precedent: `a483345`, PR #30)。全 events が `action:block`
+   (= WAF が既にブロック済み) であれば実害なしの分類ミスなので config 修正のみで良い。
+4. `npm test` (classify.ts 自体は変更していなくても回帰確認) → PR → merge。
 
 ## CCoW / CI から見た立ち位置
 
