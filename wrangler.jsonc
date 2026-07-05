@@ -54,7 +54,7 @@
 		"NOTIFY_EMAIL_TO": "m.tama.ramu@gmail.com",
 		// CF Access 済みとみなす host (分類で ✅ 扱い)。default + mtamaramu staging 系
 		// (staging.hono-logi / staging-durable-object-test 等、CF Access 適用済み) を追加。
-		"ACCESS_GATED_PATTERNS": "*-staging.ippoan.org,*-dev.ippoan.org,*staging*.mtamaramu.com,ui-preview.ippoan.org"
+		"ACCESS_GATED_PATTERNS": "*-staging.ippoan.org,*-dev.ippoan.org,*staging*.mtamaramu.com,ui-preview.ippoan.org,*-preview.ippoan.org"
 	},
 	"secrets_store_secrets": [
 		{
